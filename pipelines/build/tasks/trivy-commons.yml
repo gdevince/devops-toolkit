@@ -1,0 +1,43 @@
+parameters:
+- name: trivy
+  type: object
+
+steps:
+- ${{ if eq(parameters.trivy.install, true) }}:
+  - task: Bash@3
+    displayName: install trivy
+    inputs:
+      targetType: inline
+      script: |
+        TRIVY_VERSION="${{ parameters.trivy.version }}"
+        if ! command -v trivy &> /dev/null; then
+          echo "Installing fixed Trivy version: $TRIVY_VERSION"
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v${TRIVY_VERSION#v}
+        fi
+
+- ${{ each action in parameters.trivy.actions }}:
+
+    - ${{ if or(eq(action, 'fs'), eq(action, 'config')) }}:
+      # 'fs' action covers SCA (Software Composition Analysis) and Secret Scanning.
+      # 'config' action covers IaC Scanning and Dockerfile Best Practices (root user, healthcheck, etc.).
+      - task: Bash@3
+        displayName: trivy ${{ action }} scan
+        inputs:
+          targetType: inline
+          script: |
+            SEVERITY="${{ join(',', parameters.trivy.severity) }}"
+            trivy ${{ action }} --severity ${SEVERITY:-HIGH,CRITICAL} --exit-code ${{ coalesce(parameters.trivy.exitCode, 1) }} ${{ coalesce(parameters.trivy.target, '.') }}
+
+    - ${{ if eq(action, 'image') }}:
+      # 'image' action covers OS vulnerabilities, application dependencies, and exposed secrets in layers.
+      - ${{ each img in parameters.trivy.images }}:
+  
+        - task: Bash@3
+          displayName: trivy image scan ${{ img.repository }}
+          inputs:
+            targetType: inline
+            script: |
+              SEVERITY="${{ join(',', parameters.trivy.severity) }}"
+              FULL_IMAGE="${{ img.acrName }}.azurecr.io/${{ img.repository }}:${{ img.tag }}"
+              trivy image --severity ${SEVERITY:-HIGH,CRITICAL} --exit-code ${{ coalesce(parameters.trivy.exitCode, 1) }} ${FULL_IMAGE}
+

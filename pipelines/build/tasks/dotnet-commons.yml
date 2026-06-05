@@ -1,0 +1,35 @@
+parameters:
+- name: dotnetVersion
+  type: string
+- name: nuget
+  type: object
+
+steps:
+- task: UseDotNet@2
+  displayName: "Use .NET SDK ${{ parameters.dotnetVersion }}"
+  inputs:
+    packageType: sdk
+    version: ${{ parameters.dotnetVersion }}
+- ${{ each dir in parameters.nuget.dirs }}:
+  - powershell: |
+      Remove-Item nuget.config, NuGet.Config -Force -ErrorAction SilentlyContinue
+      dotnet new nugetconfig --force --output .
+      if (Test-Path nuget.config) { Rename-Item nuget.config NuGet.Config -Force }
+    workingDirectory: ${{ dir }}
+    displayName: "touch NuGet.Config in ${{ dir }}"
+
+  - ${{ each feed in parameters.nuget.feeds }}:
+      - powershell: |
+          $url = "${{ feed.url }}"
+          $name = "${{ feed.name }}"
+          $user = "${{ feed.user }}"
+          $token = "${{ feed.token }}"
+
+          $cmd = "dotnet nuget add source `"$url`" -n `"$name`" --configfile `"./NuGet.Config`""
+          if ($user -and $token) { $cmd += " -u `"$user`" -p `"$token`" --store-password-in-clear-text --valid-authentication-types basic" }
+
+          Write-Host "Adding feed $name in ${{ dir }}/NuGet.Config"
+          Invoke-Expression $cmd
+        workingDirectory: ${{ dir }}
+        displayName: "add ${{ feed.name }} to ${{ dir }}/NuGet.Config"
+

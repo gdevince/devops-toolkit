@@ -1,0 +1,23 @@
+parameters:
+- name: files
+  type: object
+  default: []
+
+steps:
+- ${{ each file in parameters.files }}:
+  - powershell: |
+      $setupScript = @"
+      ${{ file.setup }}
+      "@
+      if (-not [string]::IsNullOrWhiteSpace($setupScript)) { Invoke-Expression $setupScript }
+
+      $destDir = "${{ file.path }}"
+      if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force }
+      
+      $content = @"
+      ${{ file.content }}
+      "@
+      $content | Out-File -FilePath "$destDir/${{ file.name }}" -Encoding utf8
+    displayName: create file ${{ file.name }}
+
+

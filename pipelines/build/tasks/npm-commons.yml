@@ -1,0 +1,59 @@
+parameters:
+- name: stage
+  type: string
+- name: nodeVersion
+  type: string
+- name: npm
+  type: object
+
+steps:
+
+- task: UseNode@1
+  displayName: Use Node ${{ parameters.nodeVersion }}
+  inputs:
+    version: ${{ parameters.nodeVersion }}
+
+- ${{ each dir in parameters.npm.dirs }}:
+  - powershell: |
+      $npmrcPath = ".npmrc"
+
+      if (Test-Path $npmrcPath) {
+        Remove-Item $npmrcPath -Force
+        Write-Host "Removed existing .npmrc at $npmrcPath"
+      }
+      New-Item -Path $npmrcPath -ItemType File -Force | Out-Null
+      Write-Host "Created new .npmrc in $npmrcPath"
+      Add-Content -Path $npmrcPath -Value "always-auth=true"
+    workingDirectory: ${{ dir }}
+    displayName: create .npmrc in ${{ dir }}
+
+  - ${{ each feed in parameters.npm.feeds }}:
+    - powershell: |
+        $npmrcPath = ".npmrc"
+        $user = "${{ feed.user }}"
+        $token = "${{ feed.token }}"
+        $url = "${{ feed.url }}"
+
+        $scopesInput = @("${{ join(' ', feed.scopes) }}".Trim().Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries))
+
+        if ($scopesInput.Count -gt 0 -and $scopesInput[0] -ne "") {
+          foreach ($scope in $scopesInput) {
+            Write-Host ("##[command]Add feed: " + $scope + ":" + $url)
+            Add-Content -Path $npmrcPath -Value ($scope + ":registry=" + $url)
+          }
+        } else {
+          Write-Host ("##[command]Add feed: " + $url)
+          Add-Content -Path $npmrcPath -Value ("registry=" + $url)
+        }
+
+        $connString = $url -replace '^https://', '' -replace '/+$', ''
+        Add-Content -Path $npmrcPath -Value ("//" + $connString + "/:username=" + $user)
+        Add-Content -Path $npmrcPath -Value ("//" + $connString + "/:_password=" + $token)
+      workingDirectory: ${{ dir }}
+      displayName: add .npmrc feeds in ${{ dir }}
+
+- ${{ each command in parameters.npm.commandsToRun }}:
+    - powershell: ${{ command.command }}
+      workingDirectory: ${{ command.workDir }}
+      displayName: ${{ command.name }}
+

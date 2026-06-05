@@ -1,0 +1,42 @@
+parameters:
+- name: commons
+  type: object
+
+steps:
+
+- ${{ if parameters.commons.copy }}:
+  - ${{ each copy in parameters.commons.copy }}:
+    - task: CopyFiles@2
+      displayName: copy ${{ copy.name }}
+      inputs:
+        SourceFolder: ${{ copy.sourcePath }}
+        Contents: ${{ copy.contents }}
+        TargetFolder: ${{ copy.targetPath }}
+
+- ${{ if parameters.commons.archive }}:
+  - ${{ each arc in parameters.commons.archive }}:
+    - task: ArchiveFiles@2
+      displayName: archive ${{ arc.name }}.${{ arc.type }}
+      inputs:
+        rootFolderOrFile: ${{ arc.sourcePath }}
+        includeRootFolder: ${{ arc.includeRootDir }}
+        archiveType: ${{ arc.type }}
+        archiveFile: ${{ arc.destPath }}/${{ arc.name }}.${{ arc.type }}
+        replaceExistingArchive: ${{ arc.replace }}
+
+- ${{ if parameters.commons.publish }}:
+  - ${{ each pub in parameters.commons.publish }}:
+    
+    - ${{ if eq(pub.type, 'local') }}:
+      - task: PublishBuildArtifacts@1
+        displayName: local publish ${{ pub.name }}
+        inputs:
+          PathtoPublish: ${{ pub.sourcePath }}
+          ArtifactName: ${{ pub.name }}
+          publishLocation: Container
+
+    - ${{ if and(eq(pub.type, 'storage'), eq(parameters.commons.stage, 'CD')) }}:
+      - powershell: |
+          az storage blob delete-batch -s '$web' --account-name "$(STORAGE_ACCOUNT_NAME)" --sas-token "$(STORAGE_ACCOUNT_SAS_TOKEN)"
+          az storage blob upload-batch -s "${{ pub.sourcePath }}" -d '$web' --account-name "$(STORAGE_ACCOUNT_NAME)" --sas-token "$(STORAGE_ACCOUNT_SAS_TOKEN)" --overwrite
+        displayName: storage publish ${{ pub.name }}

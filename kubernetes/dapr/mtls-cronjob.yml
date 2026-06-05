@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dapr-mtls-renew-cron
+  namespace: dapr-system
+spec:
+  schedule: "0 3 10 */6 *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: dapr-mtls-renew-sa
+          containers:
+          - name: dapr-mtls-renew
+            image: docker.io/cadockeragent/kubedapr:1.30.5
+            imagePullPolicy: Always
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Connecting to cluster..."
+              export TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              export NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+              export APISERVER="https://kubernetes.default.svc"
+              kubectl config set-cluster default-cluster --server=${APISERVER} --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt --embed-certs=true
+              kubectl config set-credentials default-user --token=${TOKEN}
+              kubectl config set-context default-context --cluster=default-cluster --user=default-user --namespace=${NAMESPACE}
+              kubectl config use-context default-context
+              echo "Checking dapr-system namespace..."
+              kubectl get po -n dapr-system
+              echo "Checking dapr helm chart in dapr-system namespace..."
+              helm list -n dapr-system
+              echo "Checking dapr cert expiration before rotation..."
+              dapr mtls expiry
+              echo "Executing dapr cert rotation..."
+              dapr mtls renew-certificate --valid-until 365 -k --restart
+              echo "Checking dapr cert expiration before rotation..."
+              dapr mtls expiry
+          restartPolicy: OnFailure
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dapr-mtls-renew-sa
+  namespace: dapr-system
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dapr-mtls-renew-cr
+rules:
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: [""]
+  resources: ["secrets", "configmaps", "pods", "serviceaccounts", "services"]
+  verbs: ["get", "list", "patch", "create", "update"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "deployments", "replicasets"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: ["dapr.io"]
+  resources: ["configurations"]
+  verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dapr-mtls-renew-crb
+subjects:
+- kind: ServiceAccount
+  name: dapr-mtls-renew-sa
+  namespace: dapr-system
+roleRef:
+  kind: ClusterRole
+  name: dapr-mtls-renew-cr
+  apiGroup: rbac.authorization.k8s.io
+

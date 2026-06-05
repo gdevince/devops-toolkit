@@ -1,0 +1,87 @@
+parameters:
+- name: docker
+  type: object
+
+steps:
+- ${{ each action in parameters.docker.actions }}:
+
+  # --- BUILD ---
+  - ${{ if eq(action, 'build') }}:
+    - ${{ each img in parameters.docker.images }}:
+      - task: Docker@2
+        displayName: docker build ${{ img.repository }}
+        inputs:
+          command: build
+          containerRegistry: ${{ img.acrName }}
+          repository: ${{ img.repository }}
+          Dockerfile: ${{ img.dockerfilePath }}
+          buildContext: ${{ img.buildContext }}
+          tags: ${{ img.tag }}
+  
+  # --- PUSH ---
+  - ${{ if eq(action, 'push') }}:
+    - ${{ each img in parameters.docker.images }}:
+      - task: Docker@2
+        displayName: docker push ${{ img.repository }}
+        inputs:
+          command: push
+          containerRegistry: ${{ img.acrName }}
+          repository: ${{ img.repository }}
+          tags: |
+            ${{ coalesce(img.newTag, img.tag) }}
+
+  # --- PULL ---
+  - ${{ if eq(action, 'pull') }}:
+    - ${{ each img in parameters.docker.images }}:
+      - task: Docker@2
+        displayName: docker login ${{ img.acrName }}
+        inputs:
+          command: login
+          containerRegistry: ${{ img.acrName }}
+
+      - pwsh: |
+          docker pull "${{ img.acrName }}.azurecr.io/${{ img.repository }}:${{ img.tag }}"
+        displayName: "docker pull ${{ img.tag }}"
+
+      - task: Docker@2
+        displayName: docker logout ${{ img.acrName }}
+        inputs:
+          command: logout
+          containerRegistry: ${{ img.acrName }}
+        condition: always()
+
+  # --- LOGIN ---
+  - ${{ if eq(action, 'login') }}:
+    - ${{ each img in parameters.docker.images }}:
+      - task: Docker@2
+        displayName: docker login ${{ img.acrName }}
+        inputs:
+          command: login
+          containerRegistry: ${{ img.acrName }}
+  
+  # --- LOGOUT ---
+  - ${{ if eq(action, 'logut') }}:
+    - ${{ each img in parameters.docker.images }}:
+      - task: Docker@2
+        displayName: docker logout ${{ img.acrName }}
+        inputs:
+          command: logout
+          containerRegistry: ${{ img.acrName }}
+        condition: always()
+
+  # --- TAG ---
+  - ${{ if eq(action, 'tag') }}:
+    - ${{ each img in parameters.docker.images }}:
+      - ${{ if img.newTag }}:
+        - pwsh: |
+            docker tag "${{ img.acrName }}.azurecr.io/${{ img.repository }}:${{ img.tag }}" "${{ img.acrName }}.azurecr.io/${{ img.repository }}:${{ img.newTag }}"
+          displayName: "docker tag ${{ img.tag }} -> ${{ img.newTag }}"
+
+  # --- CLEAN ---
+  - ${{ if eq(action, 'clean') }}:
+    - powershell: |
+        docker system prune -f
+      displayName: docker clean
+      continueOnError: true
+      condition: always()
+

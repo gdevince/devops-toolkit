@@ -1,0 +1,46 @@
+trigger: none
+
+resources:
+  pipelines:
+  - pipeline: sourcePipeline
+    source: service-name
+
+parameters:
+- name: targetEnvironment
+  displayName: "Target environment:"
+  default: dev
+  values: [ dev, col, prd ]
+
+variables:
+- name: name
+  value: $(resources.pipeline.sourcePipeline.pipelineName)
+- name: version
+  value: $(resources.pipeline.sourcePipeline.runName)
+
+name: $(version) on ${{ parameters.targetEnvironment }}
+appendCommitMessageToRunName: false
+
+stages:
+- stage: CD
+  jobs:
+    - deployment: helm
+      timeoutInMinutes: 60
+      environment: ${{ parameters.targetEnvironment }}
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: self
+                persistCredentials: true
+              - template: tasks/set-version.yml
+                parameters:
+                  replace:
+                    - name: ${{ variables.name }}
+                      version: ${{ variables.version }}
+                      targetEnvironment: ${{ parameters.targetEnvironment }}
+                      yamlPath: apps/${{ parameters.targetEnvironment }}/${{ variables.name }}-patch.yaml
+                    - name: archiving-worker
+                      version: ${{ variables.version }}
+                      targetEnvironment: ${{ parameters.targetEnvironment }}
+                      yamlPath: apps/${{ parameters.targetEnvironment }}/${{ variables.name }}-worker-patch.yaml
+

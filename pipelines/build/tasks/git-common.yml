@@ -1,0 +1,53 @@
+parameters:
+- name: git
+  type: object
+
+steps:
+- ${{ each action in parameters.git.actions }}:
+
+  # --- VERSION ---
+  - ${{ if eq(action, 'version') }}:
+    - pwsh: |
+        Write-Host "Executing command on file ${{ parameters.git.version.filePath }} to set version ${{ parameters.git.version.newVersion }}"
+        ${{ parameters.git.version.command }}
+      displayName: Git Version ${{ parameters.git.version.newVersion }} on ${{ parameters.git.version.filePath }}
+      condition: succeeded()
+
+  # --- COMMIT & PUSH ---
+  - ${{ if eq(action, 'commit') }}:
+    - pwsh: |
+        git config user.email "azure@pipeline.it"
+        git config user.name "Azure DevOps Pipeline"
+        
+        $changes = git status --porcelain
+        if ($changes) {
+            Write-Host "Modifiche rilevate nella workspace. Eseguo il commit..."
+            git add .
+            git commit -m "chore: bump version to ${{ parameters.git.commit.version }} [skip ci]"
+            
+            $branch = "$(Build.SourceBranch)".Replace("refs/heads/", "")
+            Write-Host "Faccio il push dalla HEAD locale al branch remoto: $branch"
+            git push origin HEAD:$branch
+        } else {
+            Write-Host "Nessuna modifica rilevata nel workspace."
+        }
+      displayName: "Git Commit and Push"
+      condition: succeeded()
+
+  # --- TAGS GENERATION ---
+  - ${{ if eq(action, 'tag') }}:
+    - ${{ each tag in parameters.git.tags }}:
+      - pwsh: |
+          git config user.email "azure@pipeline.it"
+          git config user.name "Azure DevOps Pipeline"
+          $tagValue = "${{ tag.name }}/${{ tag.value }}"
+          
+          if (git tag -l $tagValue) {
+              Write-Host "Tag $tagValue già esistente. Salto."
+          } else {
+              git tag $tagValue
+              git push origin $tagValue
+          }
+        displayName: Git tag ${{ tag.name }}
+        condition: succeeded()
+

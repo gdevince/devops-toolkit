@@ -1,0 +1,49 @@
+parameters:
+- name: helm
+  type: object
+
+steps:
+- task: HelmInstaller@1
+  displayName: Install Helm
+  inputs:
+    helmVersion: latest
+
+- ${{ each chart in parameters.helm }}:
+  
+  - task: Docker@2
+    displayName: docker login
+    inputs:
+      containerRegistry: ${{ chart.serviceConnection }}
+      command: login
+
+  - powershell: |
+      $chartPath = "${{ chart.chartPath }}"
+      $acrHost   = "${{ chart.ociHost }}"
+      $ociPath   = "${{ chart.ociPath }}"
+      $chartName = "${{ chart.chartName }}"
+      $zipPath   = "$(Build.ArtifactStagingDirectory)"
+      
+      $version = (helm show chart $chartPath | Select-String "^version:").ToString().Split(":")[1].Trim() -replace "['""]", ""
+      Write-Host "##vso[task.setvariable variable=CHART_VERSION]$version"
+      
+      Write-Host "--- Packaging $chartName v$version ---" -ForegroundColor Cyan
+      helm package $chartPath --destination $zipPath
+      
+      $fullOciUrl = "oci://$acrHost/$ociPath"
+      
+      Write-Host "Pushing to $fullOciUrl" -ForegroundColor Green
+      $packageFile = Join-Path $zipPath "$chartName-$version.tgz"
+      helm push $packageFile $fullOciUrl
+    displayName: Helm Push ${{ chart.chartName }}
+
+  - powershell: |
+      Write-Host "##vso[build.updatebuildnumber]$(CHART_VERSION)"
+    displayName: update build number
+
+  - task: Docker@2
+    displayName: docker logout
+    condition: always()
+    inputs:
+      containerRegistry: ${{ chart.serviceConnection }}
+      command: logout
+

@@ -1,0 +1,26 @@
+trigger: none
+
+parameters:
+- name: majorVersion
+  displayName: Major version
+  type: string
+  default: 0
+- name: minorVersion
+  displayName: Minor version
+  type: string
+  default: 1
+
+variables:
+- group: common-env
+
+steps:
+- checkout: self
+
+- template: tasks/helm-commons.yml
+  parameters:
+    helm:
+      - chartName: microservice
+        chartPath: charts/microservice
+        serviceConnection: $(DOCKER_CONNECTION)
+        ociHost: {ACR_NAME}.azurecr.io
+        ociPath: {PROJECT}/helm-charts

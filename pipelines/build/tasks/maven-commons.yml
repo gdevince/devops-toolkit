@@ -26,3 +26,4 @@ steps:
         mavenPomFile: ${{ parameters.maven.build.pom }}
         goals: ${{ parameters.maven.build.goal }}
 
+

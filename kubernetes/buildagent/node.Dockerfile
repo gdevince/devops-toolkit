@@ -73,3 +73,4 @@ RUN chown -R agent:chromeuser /azp /usr/lib/node_modules /usr/bin && chmod +x st
 USER agent
 
 ENTRYPOINT [ "./start.sh" ]
+

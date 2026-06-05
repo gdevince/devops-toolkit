@@ -44,3 +44,4 @@ stages:
                       targetEnvironment: ${{ parameters.targetEnvironment }}
                       yamlPath: apps/${{ parameters.targetEnvironment }}/${{ variables.name }}-worker-patch.yaml
 
+

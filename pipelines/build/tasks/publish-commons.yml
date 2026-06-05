@@ -40,3 +40,4 @@ steps:
           az storage blob delete-batch -s '$web' --account-name "$(STORAGE_ACCOUNT_NAME)" --sas-token "$(STORAGE_ACCOUNT_SAS_TOKEN)"
           az storage blob upload-batch -s "${{ pub.sourcePath }}" -d '$web' --account-name "$(STORAGE_ACCOUNT_NAME)" --sas-token "$(STORAGE_ACCOUNT_SAS_TOKEN)" --overwrite
         displayName: storage publish ${{ pub.name }}
+

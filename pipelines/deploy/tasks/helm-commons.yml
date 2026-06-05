@@ -47,3 +47,4 @@ steps:
       containerRegistry: ${{ chart.serviceConnection }}
       command: logout
 
+

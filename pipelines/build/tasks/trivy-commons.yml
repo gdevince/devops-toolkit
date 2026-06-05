@@ -41,3 +41,4 @@ steps:
               FULL_IMAGE="${{ img.acrName }}.azurecr.io/${{ img.repository }}:${{ img.tag }}"
               trivy image --severity ${SEVERITY:-HIGH,CRITICAL} --exit-code ${{ coalesce(parameters.trivy.exitCode, 1) }} ${FULL_IMAGE}
 
+

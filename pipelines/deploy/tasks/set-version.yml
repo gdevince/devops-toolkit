@@ -71,3 +71,4 @@ steps:
         Write-Host "No changes to commit."
     }
   displayName: git commit and push
+

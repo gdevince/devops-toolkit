@@ -82,3 +82,4 @@ roleRef:
   name: dapr-mtls-renew-cr
   apiGroup: rbac.authorization.k8s.io
 
+

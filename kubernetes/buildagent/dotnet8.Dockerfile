@@ -47,3 +47,4 @@ RUN chown -R agent:agent /azp /home/agent \
 USER agent
 
 ENTRYPOINT ["./start.sh"]
+

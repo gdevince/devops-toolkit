@@ -1,0 +1,27 @@
+parameters:
+- name: maven
+  type: object
+
+steps:
+- ${{ each action in parameters.maven.actions }}:
+  # --- INSTALL ---
+  - ${{ if eq(action, 'setup') }}:
+    - task: JavaToolInstaller@1
+      displayName: Set up Java
+      inputs:
+        versionSpec: ${{ parameters.maven.version }}
+        jdkArchitectureOption: x64
+        jdkSourceOption: PreInstalled
+  # --- AUTH ---
+  - ${{ if eq(action, 'auth') }}:
+    - task: MavenAuthenticate@0
+      displayName: Maven Authenticate to Azure Artifacts
+      inputs:
+        artifactsFeeds: ${{ parameters.maven.auth.feed }}
+  # --- BUILD ---
+  - ${{ if eq(action, 'build') }}:
+    - task: Maven@3
+      displayName: Maven Build
+      inputs:
+        mavenPomFile: ${{ parameters.maven.build.pom }}
+        goals: ${{ parameters.maven.build.goal }}

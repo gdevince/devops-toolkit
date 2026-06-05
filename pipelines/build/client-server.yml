@@ -1,0 +1,93 @@
+trigger: none
+
+parameters:
+- name: majorVersion
+  type: string
+  default: 1
+- name: minorVersion
+  type: string
+  default: 1
+- name: notes
+  type: string
+  default: ' '
+
+variables:
+- group: revorg-suite
+- name: version
+  value: ${{ parameters.majorVersion }}.${{ parameters.minorVersion }}
+
+name: ${{ variables.version }}.$(Rev:r)
+
+steps:
+- template: tasks/npm-commons.yml
+  parameters:
+    stage: CD
+    nodeVersion: 16.x
+    npm:
+      dirs: [ $(System.DefaultWorkingDirectory), codegen, client ]
+      feeds:
+        - url: 'https://{DEVOPS}:{PORT}/{COLLECTION}/_packaging/{FEED}/npm/registry/'
+          user: '$(SA_USER)'
+          token: '$(NPM_TOKEN)'
+          scopes: [""]
+      commandsToRun:
+        - name: npm run setup
+          command: npm run setup
+          workDir: $(System.DefaultWorkingDirectory)
+        - name: npm run build
+          command: npm run build
+          workDir: $(System.DefaultWorkingDirectory)
+
+- template: tasks/server-commons.yml
+
+- template: tasks/file-commons.yml
+  parameters:
+    files:
+      - name: RELEASE.txt
+        path: $(Build.ArtifactStagingDirectory)/dist
+        initScript: |
+          $env:RELEASE_DATE = Get-Date -Format "yyyy-MM-dd HH:mm"
+          $env:RELEASE_NOTES = "${{ parameters.notes }}"
+        content: |
+          Version $(Build.BuildNumber)
+          Build date $env:RELEASE_DATE
+          Branch $(Build.SourceBranch)
+          LastChange $(Build.SourceVersion)
+          Note $env:RELEASE_NOTES
+
+- template: tasks/publish-commons.yml
+  parameters:
+    commons:
+      stage: CD
+      copy:
+        - name: ef6.exe
+          sourcePath: server/packages/EntityFramework.6.4.4/tools/net40/any
+          contents: ef6.exe
+          targetPath: $(Build.ArtifactStagingDirectory)/migrate
+        - name: deploy.ps1
+          sourcePath: Bake
+          contents: deploy.ps1
+          targetPath: $(Build.ArtifactStagingDirectory)/deploy
+      archive:
+        - name: Revorg.Suite.Client.$(Build.BuildNumber)
+          type: zip
+          sourcePath: client/dist
+          destPath: $(Build.ArtifactStagingDirectory)/dist
+          includeRootDir: false
+          replace: true
+        - name: Revorg.Suite.WebApp.$(Build.BuildNumber)
+          type: zip
+          sourcePath: $(Build.ArtifactStagingDirectory)/WebAppContent/_PublishedWebsites/Revorg.Suite.WebApp
+          destPath: $(Build.ArtifactStagingDirectory)/dist
+          includeRootDir: false
+          replace: true
+      publish:
+        - name: migrate
+          type: local
+          sourcePath: $(Build.ArtifactStagingDirectory)/migrate
+        - name: deploy
+          type: local
+          sourcePath: $(Build.ArtifactStagingDirectory)/deploy
+        - name: dist
+          type: local
+          sourcePath: $(Build.ArtifactStagingDirectory)/dist

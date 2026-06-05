@@ -1,0 +1,19 @@
+# to merge in npm-commons.yml
+parameters:
+- name: env
+  type: object
+
+steps:
+- ${{ if eq(parameters.env.envJson.enabled, true) }}:
+  - powershell: |
+      $file = "environment.json"
+      echo "##[command]$file before:"
+      Get-Content $file -Raw
+      $json = @'
+      ${{ parameters.env.envJson.values }}
+      '@
+      $json | Out-File $file -Encoding utf8
+      echo "##[command]$file after (masked):"
+      (Get-Content $file -Raw) -replace '":\s*"[^"]*"','": "***"'
+    workingDirectory: ${{ parameters.env.envJson.dir }}
+    displayName: "populate environment.json"

@@ -1,0 +1,75 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: node20-npm10
+  namespace: buildagent
+spec:
+  jobTargetRef:
+    template:
+      spec:
+        containers:
+          - name: node20-npm10
+            image: {MYPROFILE}/buildagent:node20-npm10
+            imagePullPolicy: Always
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "1"
+            command: ["/bin/bash", "-c"]
+            args: ["./start.sh --once"]
+            env:
+              - name: VSTS_AGENT_HTTP_KEEPALIVE
+                value: "true"
+              - name: VSTS_AGENT_HTTP_TIMEOUT
+                value: "180"
+              - name: AZP_AGENT_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.name
+              - name: NODE_VERSION
+                value: "20"
+              - name: NPM_VERSION
+                value: "10"
+              - name: AZP_URL
+                valueFrom:
+                  configMapKeyRef:
+                    name: buildagent-azdo-config
+                    key: url
+              - name: AZP_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: buildagent-azdo-auth
+                    key: token
+              - name: AZP_POOL
+                valueFrom:
+                  configMapKeyRef:
+                      name: buildagent-azdo-config
+                      key: pool
+        imagePullSecrets:
+          - name: acr-secret
+        affinity:
+          nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                    - matchExpressions:
+                        - key: app
+                          operator: NotIn
+                          values:
+                            - powertools
+  pollingInterval: 30
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
+  maxReplicaCount: 5
+  minReplicaCount: 0
+  rollout:
+    strategy: gradual
+    propagationPolicy: foreground
+  scalingStrategy:
+    strategy: default
+  triggers:
+  - type: azure-pipelines
+    metadata:
+      demands: "NODE_VERSION -equals 20,NPM_VERSION -equals 10"
+      poolID: "14"
+      organizationURLFromEnv: "AZP_URL"
+      personalAccessTokenFromEnv: "AZP_TOKEN"

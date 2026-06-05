@@ -1,0 +1,112 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+parameters:
+- name: majorVersion
+  type: string
+  displayName: "major:"
+  default: 1
+- name: minorVersion
+  type: string
+  displayName: "minor:"
+  default: 0
+
+variables:
+- name: version
+  value: v${{ parameters.majorVersion }}.${{ parameters.minorVersion }}
+
+name: ${{ variables.version }}.$(Rev:r)
+
+steps:
+- checkout: self
+  fetchDepth: 0
+  persistCredentials: true
+
+- template: tasks/trivy-commons.yml
+  parameters:
+    trivy:
+      install: true
+      version: 0.70.0
+      actions: [ fs, config ]
+      severity: [ HIGH, CRITICAL ] # Blocking severity levels
+      exitCode: 0 # Blocking pipeline if severities are found
+      target: .
+
+- template: tasks/git-commons.yml
+  parameters:
+    git:
+      version:
+        filePath: pom.xml
+        newVersion: $(Build.BuildNumber)
+        command: 'mvn versions:set -DnewVersion="$(Build.BuildNumber)" -DgenerateBackupPoms=false -f "pom.xml"'
+      actions: [ version ]
+
+- template: tasks/maven-commons.yml
+  parameters:
+    maven:
+      version: 21
+      auth:
+        type: azureArtifacts
+        feed: feed-name
+      build:
+        pom: pom.xml
+        goal: clean install -DskipTests
+      actions: [ setup, auth, build ]
+
+
+- template: tasks/docker-commons.yml
+  parameters:
+    docker:
+      actions: [ build ]
+      images: 
+        - repository: registry-name/alert-service
+          tag: $(Build.BuildNumber)
+          acrName: acr-name
+          dockerfilePath: Dockerfile
+          buildContext: .
+
+- template: tasks/docker-commons.yml
+  parameters:
+    docker:
+      actions: [ login ]
+      images: 
+        - acrName: acr-name
+
+- template: tasks/trivy-commons.yml
+  parameters:
+    trivy:
+      actions: [ image ]
+      severity: [ HIGH, CRITICAL ]
+      exitCode: 0
+      images:
+        - repository: registry-name/alert-service
+          tag: $(Build.BuildNumber)
+          acrName: acr-name
+
+- template: tasks/docker-commons.yml
+  parameters:
+    docker:
+      actions: [ logout ]
+      images: 
+        - acrName: acr-name
+
+- template: tasks/docker-commons.yml
+  parameters:
+    docker:
+      actions: [ push, clean ]
+      images:
+        - repository: registry-name/alert-service
+          tag: $(Build.BuildNumber)
+          acrName: acr-name
+
+- template: tasks/git-commons.yml
+  parameters:
+    git:
+      actions: [ commit, tag ]
+      commit:
+        version: $(Build.BuildNumber)
+      tags:
+        - name: registry-name/alert-service
+          value: $(Build.BuildNumber)

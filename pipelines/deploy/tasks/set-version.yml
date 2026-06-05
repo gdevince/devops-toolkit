@@ -1,0 +1,73 @@
+parameters:
+- name: replace
+  type: object
+
+steps:
+- ${{ each i in parameters.replace }}:
+  - powershell: |
+      $os = if ($IsWindows) { "windows" } else { "linux" }
+      $ext = if ($IsWindows) { ".exe" } else { "" }
+      $yqBinary = "./yq$ext"
+
+      if (!(Test-Path $yqBinary)) {
+          Write-Host "##[command]Installing yq for $os..."
+          $yqUri = "https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_$($os)_amd64$ext"
+          Invoke-WebRequest -Uri $yqUri -OutFile $yqBinary
+          
+          if (!$IsWindows) {
+              # Permessi di esecuzione necessari su Linux/macOS
+              chmod +x $yqBinary
+          }
+      }
+
+      $yamlPath = "${{ i.yamlPath }}"
+      $version = "${{ i.version }}"
+      $yamlProperty = ".spec.values.image.tag"
+
+      try {
+          $currentVersion = &$yqBinary $yamlProperty $yamlPath
+          Write-Host "Current $yamlPath version: $currentVersion"
+      } catch {
+          Write-Error "Errore nella lettura del file YAML: $_"
+          exit 1
+      }
+
+      if ($currentVersion -ne $version) {
+          Write-Host "Writing $version in $yamlProperty property at $yamlPath"
+          $expression = "$yamlProperty = `"$version`""
+          &$yqBinary eval $expression -i $yamlPath
+      } else {
+          Write-Host "Build number $version is equal to current version. No change needed."
+      }
+    displayName: "Set version: ${{ i.name }}"
+
+- powershell: |
+    git config user.email "$(Build.RequestedForEmail)"
+    git config user.name "$(Build.RequestedFor)"
+
+    git fetch origin
+    git checkout master
+    git pull origin master
+
+    git add .
+    
+    $name = "${{ parameters.replace[0].name }}"
+    $env  = "${{ parameters.replace[0].targetEnvironment }}"
+    $ver  = "${{ parameters.replace[0].version }}"
+    
+    $changes = git status --porcelain
+    if ($changes) {
+        git commit -m "chore: update $name manifests to $ver [skip ci]"
+        
+        $tag = "$ver-$env"
+        if (git tag -l $tag) { git tag -d $tag }
+        
+        git tag $tag
+        git push origin master --tags
+        
+        Write-Host "##vso[build.addbuildtag]$tag"
+        Write-Host "##vso[build.updatebuildnumber]$ver in $env"
+    } else {
+        Write-Host "No changes to commit."
+    }
+  displayName: git commit and push

@@ -12,7 +12,7 @@ parameters:
   default: ' '
 
 variables:
-- group: AppCore.Suite
+- group: customer
 - name: version
   value: ${{ parameters.majorVersion }}.${{ parameters.minorVersion }}
 
@@ -69,15 +69,15 @@ steps:
           contents: deploy.ps1
           targetPath: $(Build.ArtifactStagingDirectory)/deploy
       archive:
-        - name: AppCore.Suite.Client.$(Build.BuildNumber)
+        - name: Customer.Client.$(Build.BuildNumber)
           type: zip
           sourcePath: client/dist
           destPath: $(Build.ArtifactStagingDirectory)/dist
           includeRootDir: false
           replace: true
-        - name: AppCore.Suite.WebApp.$(Build.BuildNumber)
+        - name: Customer.WebApp.$(Build.BuildNumber)
           type: zip
-          sourcePath: $(Build.ArtifactStagingDirectory)/WebAppContent/_PublishedWebsites/AppCore.Suite.WebApp
+          sourcePath: $(Build.ArtifactStagingDirectory)/WebAppContent/_PublishedWebsites/Customer.WebApp
           destPath: $(Build.ArtifactStagingDirectory)/dist
           includeRootDir: false
           replace: true
@@ -91,5 +91,4 @@ steps:
         - name: dist
           type: local
           sourcePath: $(Build.ArtifactStagingDirectory)/dist
-
 

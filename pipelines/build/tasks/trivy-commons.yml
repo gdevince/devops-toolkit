@@ -42,3 +42,4 @@ steps:
               trivy image --severity ${SEVERITY:-HIGH,CRITICAL} --exit-code ${{ coalesce(parameters.trivy.exitCode, 1) }} ${FULL_IMAGE}
 
 
+
